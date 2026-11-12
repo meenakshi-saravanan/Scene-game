@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Voice of Love - 3D Endless Guided Runner</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for 3D Graphics -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        .arcade-font {
+            font-family: 'Press Start 2P', monospace;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .speech-bubble {
+            position: relative;
+            background: #ffffff;
+            color: #0f172a;
+            border-radius: 18px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+        }
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 10px 10px 0;
+            border-style: solid;
+            border-color: #ffffff transparent;
+            display: block;
+            width: 0;
+        }
+        /* Touch button active feedback */
+        .btn-touch:active {
+            transform: scale(0.92);
+            filter: brightness(1.2);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-white w-screen h-screen overflow-hidden select-none">
+
+    <!-- Canvas Container -->
+    <div id="game-container" class="absolute inset-0 w-full h-full"></div>
+
+    <!-- UI Overlay Layer -->
+    <div id="ui-layer" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 md:p-6 z-10">
+        
+        <!-- Header: Score, Distance & Heroine Voice Bubble -->
+        <div class="flex items-start justify-between w-full max-w-5xl mx-auto gap-4">
+            
+            <!-- Health & Stats -->
+            <div class="glass-panel p-3 md:p-4 rounded-2xl flex flex-col gap-2 pointer-events-auto">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Health</span>
+                    <div id="health-bar" class="flex gap-1">
+                        <!-- Hearts dynamically inserted -->
+                    </div>
+                </div>
+                <div class="flex items-center gap-4 text-sm font-bold">
+                    <div>
+                        <span class="text-slate-400 text-xs block">DISTANCE</span>
+                        <span id="distance-val" class="text-emerald-400 text-lg arcade-font">0m</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 text-xs block">SCORE</span>
+                        <span id="score-val" class="text-amber-400 text-lg arcade-font">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Voice Guidance Speech Bubble -->
+            <div id="heroine-bubble-wrapper" class="flex flex-col items-center animate-bounce transition-all duration-300">
+                <div class="speech-bubble px-5 py-3 text-center max-w-xs pointer-events-auto">
+                    <div class="text-xs uppercase font-extrabold tracking-wider text-rose-600 mb-0.5">❤️ Her Voice Guide</div>
+                    <div id="guidance-text" class="text-base md:text-lg font-black tracking-wide text-slate-900">
+                        "Run straight, I'm right behind you!"
+                    </div>
+                </div>
+            </div>
+
+            <!-- Voice Control & Settings Badge -->
+            <div class="glass-panel p-3 rounded-2xl flex flex-col items-end gap-2 pointer-events-auto">
+                <button id="voice-rec-btn" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold transition border border-slate-700">
+                    <span id="mic-icon" class="w-3 h-3 rounded-full bg-slate-500 inline-block"></span>
+                    <span id="mic-text">Voice Input Off</span>
+                </button>
+                <div class="text-[10px] text-slate-400">Commands: Left, Right, Jump, Slide</div>
+            </div>
+        </div>
+
+        <!-- On-Screen iPad Touch Controls -->
+        <div class="w-full max-w-md mx-auto pointer-events-auto mb-2 md:mb-6">
+            <div class="grid grid-cols-3 gap-3 max-w-sm mx-auto">
+                <div></div>
+                <!-- JUMP BUTTON -->
+                <button id="btn-jump" class="btn-touch bg-gradient-to-t from-indigo-700 to-indigo-500 hover:from-indigo-600 hover:to-indigo-400 text-white font-extrabold py-4 rounded-2xl shadow-lg border-b-4 border-indigo-950 flex flex-col items-center justify-center gap-1 active:translate-y-1">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+                    <span class="text-xs">JUMP</span>
+                </button>
+                <div></div>
+
+                <!-- LEFT BUTTON -->
+                <button id="btn-left" class="btn-touch bg-gradient-to-t from-emerald-700 to-emerald-500 hover:from-emerald-600 hover:to-emerald-400 text-white font-extrabold py-4 rounded-2xl shadow-lg border-b-4 border-emerald-950 flex flex-col items-center justify-center gap-1 active:translate-y-1">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    <span class="text-xs">LEFT</span>
+                </button>
+
+                <!-- SLIDE / STRAIGHT BUTTON -->
+                <button id="btn-slide" class="btn-touch bg-gradient-to-t from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-extrabold py-4 rounded-2xl shadow-lg border-b-4 border-amber-950 flex flex-col items-center justify-center gap-1 active:translate-y-1">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+                    <span class="text-xs">SLIDE</span>
+                </button>
+
+                <!-- RIGHT BUTTON -->
+                <button id="btn-right" class="btn-touch bg-gradient-to-t from-emerald-700 to-emerald-500 hover:from-emerald-600 hover:to-emerald-400 text-white font-extrabold py-4 rounded-2xl shadow-lg border-b-4 border-emerald-950 flex flex-col items-center justify-center gap-1 active:translate-y-1">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    <span class="text-xs">RIGHT</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start / Story Screen Overlay -->
+    <div id="start-screen" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md z-30 flex items-center justify-center p-6">
+        <div class="glass-panel max-w-lg w-full p-6 md:p-8 rounded-3xl text-center flex flex-col items-center gap-6 shadow-2xl border border-rose-500/20">
+            <div class="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center text-rose-400 text-3xl mb-2">
+                🦯❤️
+            </div>
+            <div>
+                <h1 class="text-3xl md:text-4xl font-black tracking-tight text-white mb-2">VOICE OF LOVE</h1>
+                <p class="text-rose-400 font-semibold text-sm uppercase tracking-widest">Endless Guided Runner Arcade</p>
+            </div>
+
+            <p class="text-slate-300 text-sm leading-relaxed">
+                You play as a blind runner moving forward with complete trust. Your guide runs right behind you, telling you when to steer <span class="text-emerald-400 font-bold">LEFT</span>, <span class="text-emerald-400 font-bold">RIGHT</span>, <span class="text-indigo-400 font-bold">JUMP</span> over obstacles, or <span class="text-amber-400 font-bold">SLIDE</span> under branches!
+            </p>
+
+            <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 text-left w-full text-xs text-slate-300 space-y-2">
+                <div class="font-bold text-white uppercase text-[11px] tracking-wider mb-1">🎮 How To Play (iPad & Mobile):</div>
+                <div>• <strong class="text-rose-400">Listen / Read:</strong> Follow the guide's audio & text hints!</div>
+                <div>• <strong class="text-emerald-400">Touch Controls:</strong> Use the on-screen directional buttons or swipe.</div>
+                <div>• <strong class="text-indigo-400">Keyboard:</strong> Arrow keys or A/D to move, Space/W to jump, S to slide.</div>
+                <div>• <strong class="text-amber-400">Microphone (Optional):</strong> Say "Left", "Right", "Jump", "Slide".</div>
+            </div>
+
+            <button id="start-btn" class="w-full py-4 bg-gradient-to-r from-rose-500 via-purple-600 to-indigo-600 hover:from-rose-600 hover:to-indigo-700 text-white font-extrabold text-lg rounded-2xl shadow-xl transform transition active:scale-95">
+                START RUNNING 🚀
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen Overlay -->
+    <div id="game-over-screen" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md z-40 flex items-center justify-center p-6 hidden">
+        <div class="glass-panel max-w-md w-full p-8 rounded-3xl text-center flex flex-col items-center gap-6 shadow-2xl">
+            <div class="text-5xl">💔</div>
+            <div>
+                <h2 class="text-3xl font-black text-white">TRIPPED UP!</h2>
+                <p class="text-slate-400 text-sm mt-1">Don't worry, trust builds with practice.</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 w-full bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+                <div>
+                    <span class="text-xs text-slate-400 uppercase block">Distance</span>
+                    <span id="final-distance" class="text-2xl font-black text-emerald-400 arcade-font">0m</span>
+                </div>
+                <div>
+                    <span class="text-xs text-slate-400 uppercase block">Score</span>
+                    <span id="final-score" class="text-2xl font-black text-amber-400 arcade-font">0</span>
+                </div>
+            </div>
+
+            <button id="restart-btn" class="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-lg rounded-2xl shadow-xl transform transition active:scale-95">
+                TRY AGAIN 🔄
+            </button>
+        </div>
+    </div>
+
+    <!-- Sound & Speech Logic -->
+    <script>
+        // Web Audio Synthesizer for Retro Arcade SFX
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playBeep(freq, type, duration, gainVal = 0.1) {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) {}
+            }
+            playJump() { this.playBeep(440, 'sine', 0.2, 0.15); }
+            playSlide() { this.playBeep(220, 'triangle', 0.25, 0.15); }
+            playCoin() { 
+                this.playBeep(880, 'sine', 0.1, 0.1);
+                setTimeout(() => this.playBeep(1320, 'sine', 0.15, 0.1), 60);
+            }
+            playHit() { this.playBeep(120, 'sawtooth', 0.3, 0.25); }
+        }
+
+        // Heroine Voice Speech Synthesizer
+        class VoiceGuide {
+            constructor() {
+                this.synth = window.speechSynthesis || null;
+                this.lastSpoken = "";
+                this.voice = null;
+                if (this.synth) {
+                    window.speechSynthesis.onvoiceschanged = () => {
+                        const voices = this.synth.getVoices();
+                        this.voice = voices.find(v => v.lang.includes('en') && v.name.includes('Female')) || voices[0];
+                    };
+                }
+            }
+            speak(text, priority = false) {
+                if (!this.synth) return;
+                if (this.synth.speaking && !priority) return;
+                
+                this.synth.cancel(); // clear previous queue for fast arcade response
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1.25; // Slightly faster for high energy guidance
+                utterance.pitch = 1.3; // Warm female voice pitch tone
+                if (this.voice) utterance.voice = this.voice;
+                this.synth.speak(utterance);
+            }
+        }
+
+        const sounds = new SoundEngine();
+        const voiceGuide = new VoiceGuide();
+    </script>
+
+    <!-- Main Game Logic with Three.js -->
+    <script>
+        // Game State Variables
+        let scene, camera, renderer;
+        let heroGroup, heroMesh, caneMesh, heroineGroup;
+        let obstacles = [];
+        let collectibles = [];
+        let environmentDecoration = [];
+
+        let isPlaying = false;
+        let score = 0;
+        let distance = 0;
+        let lives = 3;
+        let gameSpeed = 0.35;
+        let targetSpeed = 0.35;
+
+        // Lane setup: -1 (Left), 0 (Center), 1 (Right)
+        const LANE_WIDTH = 2.4;
+        let currentLane = 0; // Target lane
+        let heroX = 0; // Smooth visual position
+
+        // Jump & Slide Physics
+        let isJumping = false;
+        let jumpVelocity = 0;
+        let heroY = 0;
+        const GRAVITY = -0.018;
+        const JUMP_STRENGTH = 0.36;
+
+        let isSliding = false;
+        let slideTimer = 0;
+
+        // Spawn Timers
+        let lastObstacleZ = -30;
+        let lastCollectibleZ = -20;
+
+        // UI Element References
+        const distanceEl = document.getElementById('distance-val');
+        const scoreEl = document.getElementById('score-val');
+        const healthBarEl = document.getElementById('health-bar');
+        const guidanceTextEl = document.getElementById('guidance-text');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+
+        // Initialize Three.js Scene
+        function initScene() {
+            const container = document.getElementById('game-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x090d16);
+            scene.fog = new THREE.FogExp2(0x090d16, 0.025);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 150);
+            camera.position.set(0, 4.2, 7.5);
+            camera.lookAt(0, 1.2, -5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffecd1, 0.8);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            scene.add(dirLight);
+
+            // Ground / Path Track
+            const trackGeo = new THREE.PlaneGeometry(8, 300);
+            const trackMat = new THREE.MeshStandardMaterial({ 
+                color: 0x1e293b, 
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            const track = new THREE.Mesh(trackGeo, trackMat);
+            track.rotation.x = -Math.PI / 2;
+            track.position.z = -100;
+            track.receiveShadow = true;
+            scene.add(track);
+
+            // Track Border Lines
+            for (let x of [-LANE_WIDTH * 1.5, LANE_WIDTH * 1.5]) {
+                const borderGeo = new THREE.BoxGeometry(0.2, 0.2, 300);
+                const borderMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+                const border = new THREE.Mesh(borderGeo, borderMat);
+                border.position.set(x, 0.1, -100);
+                scene.add(border);
+            }
+
+            // Create Hero (Blind Runner) and Heroine (Guiding Companion)
+            createCharacters();
+
+            // Populate initial scenery
+            createScenery();
+
+            // Event Listeners for resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createCharacters() {
+            // HERO (BLIND RUNNER)
+            heroGroup = new THREE.Group();
+
+            // Body
+            const bodyGeo = new THREE.CylinderGeometry(0.4, 0.3, 1.4, 8);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.9;
+            body.castShadow = true;
+            heroGroup.add(body);
+
+            // Head
+            const headGeo = new THREE.SphereGeometry(0.32, 16, 16);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 1.8;
+            head.castShadow = true;
+            heroGroup.add(head);
+
+            // Blindfold (Key story element!)
+            const blindfoldGeo = new THREE.BoxGeometry(0.66, 0.12, 0.35);
+            const blindfoldMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+            const blindfold = new THREE.Mesh(blindfoldGeo, blindfoldMat);
+            blindfold.position.set(0, 1.84, -0.05);
+            heroGroup.add(blindfold);
+
+            // Walking Stick / Cane
+            const caneGeo = new THREE.CylinderGeometry(0.03, 0.03, 1.4);
+            const caneMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc });
+            caneMesh = new THREE.Mesh(caneGeo, caneMat);
+            caneMesh.position.set(0.4, 0.7, -0.3);
+            caneMesh.rotation.x = Math.PI / 4;
+            heroGroup.add(caneMesh);
+
+            heroGroup.position.set(0, 0, 0);
+            scene.add(heroGroup);
+
+            // HEROINE (GUIDING COMPANION RIGHT BEHIND)
+            heroineGroup = new THREE.Group();
+
+            const hBodyGeo = new THREE.CylinderGeometry(0.35, 0.28, 1.3, 8);
+            const hBodyMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e }); // Rose red
+            const hBody = new THREE.Mesh(hBodyGeo, hBodyMat);
+            hBody.position.y = 0.85;
+            hBody.castShadow = true;
+            heroineGroup.add(hBody);
+
+            const hHeadGeo = new THREE.SphereGeometry(0.3, 16, 16);
+            const hHeadMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+            const hHead = new THREE.Mesh(hHeadGeo, hHeadMat);
+            hHead.position.y = 1.75;
+            hHead.castShadow = true;
+            heroineGroup.add(hHead);
+
+            heroineGroup.position.set(0, 0, 2.2); // Runs directly behind him
+            scene.add(heroineGroup);
+        }
+
+        function createScenery() {
+            for (let z = 0; z > -200; z -= 12) {
+                spawnTrees(z);
+            }
+        }
+
+        function spawnTrees(zPos) {
+            [-6, 6].forEach(xPos => {
+                const treeGroup = new THREE.Group();
+                const trunk = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.2, 0.3, 3),
+                    new THREE.MeshStandardMaterial({ color: 0x475569 })
+                );
+                trunk.position.y = 1.5;
+                treeGroup.add(trunk);
+
+                const foliage = new THREE.Mesh(
+                    new THREE.ConeGeometry(1.5, 4, 5),
+                    new THREE.MeshStandardMaterial({ color: 0x059669 })
+                );
+                foliage.position.y = 4;
+                treeGroup.add(foliage);
+
+                treeGroup.position.set(xPos + (Math.random() - 0.5), 0, zPos);
+                scene.add(treeGroup);
+                environmentDecoration.push(treeGroup);
+            });
+        }
+
+        // Obstacle Spawner (Rocks, Hurdles, High Branches)
+        function spawnObstacle() {
+            const laneIndex = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
+            const xPos = laneIndex * LANE_WIDTH;
+            const zPos = lastObstacleZ - (18 + Math.random() * 10);
+            lastObstacleZ = zPos;
+
+            const type = Math.random();
+            let mesh, obsData;
+
+            if (type < 0.45) {
+                // Rock / Crate (Must dodge left/right or jump)
+                const geo = new THREE.BoxGeometry(1.4, 1.2, 1.2);
+                const mat = new THREE.MeshStandardMaterial({ color: 0xd97706 });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(xPos, 0.6, zPos);
+                mesh.castShadow = true;
+                obsData = { mesh, type: 'block', lane: laneIndex, z: zPos };
+            } else if (type < 0.75) {
+                // High Hanging Barrier (Must Slide under!)
+                const geo = new THREE.BoxGeometry(2.2, 0.5, 0.4);
+                const mat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(xPos, 1.8, zPos);
+                mesh.castShadow = true;
+                obsData = { mesh, type: 'high', lane: laneIndex, z: zPos };
+            } else {
+                // Low Wooden Barrier (Must Jump over!)
+                const geo = new THREE.BoxGeometry(2.0, 0.7, 0.3);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x854d0e });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(xPos, 0.35, zPos);
+                mesh.castShadow = true;
+                obsData = { mesh, type: 'low', lane: laneIndex, z: zPos };
+            }
+
+            scene.add(mesh);
+            obstacles.push(obsData);
+
+            // Trigger Heroine Voice Warning ahead of time!
+            triggerVoiceWarning(obsData);
+        }
+
+        // Heroine's Voice Guidance Logic
+        function triggerVoiceWarning(obstacle) {
+            const laneNames = ["LEFT", "STRAIGHT", "RIGHT"];
+            const currentLaneIndex = currentLane + 1; // 0, 1, 2
+            const obsLaneIndex = obstacle.lane + 1;
+
+            let promptText = "";
+            let speechPrompt = "";
+
+            if (obstacle.type === 'high') {
+                promptText = "⚡ SLIDE DOWN! ⬇️";
+                speechPrompt = "Slide down!";
+            } else if (obstacle.type === 'low') {
+                promptText = "🦘 JUMP OVER! ⬆️";
+                speechPrompt = "Jump now!";
+            } else {
+                // Steer away from obstacle lane
+                if (currentLane === obstacle.lane) {
+                    if (currentLane === 0) {
+                        // In center, recommend left or right
+                        const safeLane = Math.random() > 0.5 ? "LEFT" : "RIGHT";
+                        promptText = `⬅️ Go ${safeLane}! ➡️`;
+                        speechPrompt = `Go ${safeLane}!`;
+                    } else if (currentLane === -1) {
+                        promptText = "➡️ Move RIGHT! ➡️";
+                        speechPrompt = "Go Right!";
+                    } else {
+                        promptText = "⬅️ Move LEFT! ⬅️";
+                        speechPrompt = "Go Left!";
+                    }
+                } else {
+                    promptText = "👍 Keep running straight!";
+                    speechPrompt = "Straight!";
+                }
+            }
+
+            guidanceTextEl.innerText = `"${promptText}"`;
+            voiceGuide.speak(speechPrompt);
+        }
+
+        // Spawn Glowing Collectibles (Hearts / Gems)
+        function spawnCollectible() {
+            const laneIndex = Math.floor(Math.random() * 3) - 1;
+            const xPos = laneIndex * LANE_WIDTH;
+            const zPos = lastCollectibleZ - (12 + Math.random() * 8);
+            lastCollectibleZ = zPos;
+
+            const geo = new THREE.OctahedronGeometry(0.35);
+            const mat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xf43f5e, emissiveIntensity: 0.5 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(xPos, 1.2, zPos);
+
+            scene.add(mesh);
+            collectibles.push({ mesh, lane: laneIndex, z: zPos });
+        }
+
+        // Movement Actions
+        function moveLeft() {
+            if (!isPlaying) return;
+            if (currentLane > -1) {
+                currentLane--;
+                sounds.playSlide();
+            }
+        }
+
+        function moveRight() {
+            if (!isPlaying) return;
+            if (currentLane < 1) {
+                currentLane++;
+                sounds.playSlide();
+            }
+        }
+
+        function jump() {
+            if (!isPlaying) return;
+            if (!isJumping && !isSliding) {
+                isJumping = true;
+                jumpVelocity = JUMP_STRENGTH;
+                sounds.playJump();
+            }
+        }
+
+        function slide() {
+            if (!isPlaying) return;
+            if (!isSliding && !isJumping) {
+                isSliding = true;
+                slideTimer = 35; // frames duration
+                sounds.playSlide();
+            }
+        }
+
+        // Game Loop Update
+        function update() {
+            if (!isPlaying) return;
+
+            // Increase distance & speed gradually
+            distance += gameSpeed * 0.5;
+            score += 1;
+            targetSpeed = 0.35 + (distance * 0.0003);
+            gameSpeed = THREE.MathUtils.lerp(gameSpeed, targetSpeed, 0.05);
+
+            distanceEl.innerText = `${Math.floor(distance)}m`;
+            scoreEl.innerText = score;
+
+            // Smooth Lateral Lane Movement
+            const targetX = currentLane * LANE_WIDTH;
+            heroX = THREE.MathUtils.lerp(heroX, targetX, 0.2);
+            heroGroup.position.x = heroX;
+            heroineGroup.position.x = THREE.MathUtils.lerp(heroineGroup.position.x, heroX, 0.15); // Follows smoothly
+
+            // Handle Jump Physics
+            if (isJumping) {
+                heroY += jumpVelocity;
+                jumpVelocity += GRAVITY;
+                if (heroY <= 0) {
+                    heroY = 0;
+                    isJumping = false;
+                }
+            }
+            heroGroup.position.y = heroY;
+
+            // Handle Slide Physics
+            if (isSliding) {
+                slideTimer--;
+                heroGroup.scale.set(1, 0.5, 1);
+                heroGroup.position.y = -0.3;
+                if (slideTimer <= 0) {
+                    isSliding = false;
+                    heroGroup.scale.set(1, 1, 1);
+                    heroGroup.position.y = 0;
+                }
+            }
+
+            // Cane Animation (Tap-tap feel)
+            caneMesh.rotation.z = Math.sin(Date.now() * 0.01) * 0.3;
+
+            // Move Environment & Spawn objects
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.mesh.position.z += gameSpeed * 10;
+
+                // Collision Detection with Hero
+                const zDist = Math.abs(obs.mesh.position.z - heroGroup.position.z);
+                const xDist = Math.abs(obs.mesh.position.x - heroGroup.position.x);
+
+                if (zDist < 1.0 && xDist < 0.9) {
+                    let hit = false;
+                    if (obs.type === 'block' && heroY < 0.8) hit = true;
+                    if (obs.type === 'low' && heroY < 0.7) hit = true;
+                    if (obs.type === 'high' && !isSliding) hit = true;
+
+                    if (hit) {
+                        sounds.playHit();
+                        scene.remove(obs.mesh);
+                        obstacles.splice(i, 1);
+                        takeDamage();
+                        continue;
+                    }
+                }
+
+                // Cleanup passed obstacles
+                if (obs.mesh.position.z > 10) {
+                    scene.remove(obs.mesh);
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // Move Collectibles
+            for (let i = collectibles.length - 1; i >= 0; i--) {
+                const col = collectibles[i];
+                col.mesh.position.z += gameSpeed * 10;
+                col.mesh.rotation.y += 0.05;
+
+                const zDist = Math.abs(col.mesh.position.z - heroGroup.position.z);
+                const xDist = Math.abs(col.mesh.position.x - heroGroup.position.x);
+
+                if (zDist < 1.0 && xDist < 0.9) {
+                    sounds.playCoin();
+                    score += 150;
+                    scene.remove(col.mesh);
+                    collectibles.splice(i, 1);
+                    continue;
+                }
+
+                if (col.mesh.position.z > 10) {
+                    scene.remove(col.mesh);
+                    collectibles.splice(i, 1);
+                }
+            }
+
+            // Move Background Trees for endless effect
+            environmentDecoration.forEach(item => {
+                item.position.z += gameSpeed * 10;
+                if (item.position.z > 10) {
+                    item.position.z = -190;
+                }
+            });
+
+            // Spawning Triggers
+            if (lastObstacleZ > -100) spawnObstacle();
+            if (lastCollectibleZ > -100) spawnCollectible();
+        }
+
+        function render() {
+            requestAnimationFrame(render);
+            update();
+            renderer.render(scene, camera);
+        }
+
+        function updateHealthUI() {
+            healthBarEl.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                const heart = document.createElement('span');
+                heart.className = i < lives ? 'text-rose-500 text-lg' : 'text-slate-600 text-lg';
+                heart.innerText = '❤️';
+                healthBarEl.appendChild(heart);
+            }
+        }
+
+        function takeDamage() {
+            lives--;
+            updateHealthUI();
+            
+            // Screen Shake Effect
+            camera.position.x = (Math.random() - 0.5) * 0.6;
+            setTimeout(() => { camera.position.x = 0; }, 150);
+
+            if (lives <= 0) {
+                gameOver();
+            }
+        }
+
+        function startGame() {
+            sounds.init();
+            lives = 3;
+            score = 0;
+            distance = 0;
+            gameSpeed = 0.35;
+            currentLane = 0;
+            heroX = 0;
+
+            // Clear old objects
+            obstacles.forEach(o => scene.remove(o.mesh));
+            collectibles.forEach(c => scene.remove(c.mesh));
+            obstacles = [];
+            collectibles = [];
+            lastObstacleZ = -30;
+            lastCollectibleZ = -20;
+
+            updateHealthUI();
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            isPlaying = true;
+
+            voiceGuide.speak("Follow my voice! Let's go!", true);
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            document.getElementById('final-distance').innerText = `${Math.floor(distance)}m`;
+            document.getElementById('final-score').innerText = score;
+            gameOverScreen.classList.remove('hidden');
+            voiceGuide.speak("Oh no! We will try again!", true);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Setup Controls (Keyboard + Touch + Voice API)
+        function setupControls() {
+            // Keyboard Controls
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLeft();
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveRight();
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') jump();
+                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') slide();
+            });
+
+            // Touch / Button Controls for iPad
+            document.getElementById('btn-left').addEventListener('click', moveLeft);
+            document.getElementById('btn-right').addEventListener('click', moveRight);
+            document.getElementById('btn-jump').addEventListener('click', jump);
+            document.getElementById('btn-slide').addEventListener('click', slide);
+
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', startGame);
+
+            // Optional Web Speech API Voice Recognition (Hands-free control)
+            const voiceBtn = document.getElementById('voice-rec-btn');
+            const micIcon = document.getElementById('mic-icon');
+            const micText = document.getElementById('mic-text');
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            if (SpeechRecognition) {
+                const recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+
+                let isListening = false;
+
+                voiceBtn.addEventListener('click', () => {
+                    sounds.init();
+                    if (!isListening) {
+                        recognition.start();
+                        isListening = true;
+                        micIcon.className = 'w-3 h-3 rounded-full bg-rose-500 animate-ping inline-block';
+                        micText.innerText = 'Listening...';
+                    } else {
+                        recognition.stop();
+                        isListening = false;
+                        micIcon.className = 'w-3 h-3 rounded-full bg-slate-500 inline-block';
+                        micText.innerText = 'Voice Input Off';
+                    }
+                });
+
+                recognition.onresult = (event) => {
+                    const lastResultIndex = event.results.length - 1;
+                    const command = event.results[lastResultIndex][0].transcript.trim().toLowerCase();
+                    
+                    if (command.includes('left')) moveLeft();
+                    else if (command.includes('right')) moveRight();
+                    else if (command.includes('jump') || command.includes('up')) jump();
+                    else if (command.includes('slide') || command.includes('down') || command.includes('straight')) slide();
+                };
+
+                recognition.onerror = () => {
+                    micIcon.className = 'w-3 h-3 rounded-full bg-slate-500 inline-block';
+                    micText.innerText = 'Voice Input Error';
+                };
+            } else {
+                micText.innerText = 'Voice Rec Unsupported';
+            }
+        }
+
+        // Initialize App on Load
+        window.onload = function() {
+            initScene();
+            setupControls();
+            render();
+        };
+    </script>
+</body>
+</html>
